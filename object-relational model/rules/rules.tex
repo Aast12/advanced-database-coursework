@@ -1,0 +1,117 @@
+\documentclass[]{article}
+\usepackage[margin={1in}]{geometry}
+\usepackage[spanish]{babel}
+\usepackage{datetime}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{verbatim}
+\usepackage{fancyhdr}
+\usepackage{enumerate}
+\usepackage[obeyspaces]{url}
+\usepackage{graphicx}
+\graphicspath{ {.} }
+\newdateformat{hwdate}{\THEDAY~de \monthname[\THEMONTH], \THEYEAR}
+\newcommand{\class}{TC3041. Base de Datos Avanzadas}
+\newcommand{\hwname}{Reglas en modelo Objeto Relacional}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\class \\ \hwname}
+\rhead{Andrés Alam Sánchez Torres (A00824854) \\ \hwdate\today}
+
+\lstset{breaklines=true,
+        language=SQL,
+        extendedchars=true,
+        basicstyle=\ttfamily\small,
+        showstringspaces=false,
+        literate={é}{{\'e}}1 {É}{{\'E}}1 
+        } 
+
+\begin{document}
+    \setlength{\headheight}{23.10004pt}
+    \addtolength{\topmargin}{-11.10004pt}    
+
+    \noindent
+    A la base de datos universitaria (definidaen ejercicio anterior.) se le deben agregar las 
+    siguientes restricciones y/o reglas de operación (o reglas de negocio). Especifique las 
+    reglas o restricciones que se deben de agregar. Suponga cada caso independiente.
+
+    \begin{enumerate}[a)]
+        \item Los profesores deben ganar un salario mínimo de \$1000.00 dls al mes.
+        
+        \begin{lstlisting}
+            create rule min_salario as
+            on update to Empleado.salario_por_hora 
+                where new.salario_por_hora * 160 < 1000
+            do update Profesor
+                set salario_por_hora = 1000 / 160
+                where Profesor.rfc = current.rfc
+        \end{lstlisting}
+
+        \item Todo director de departamento debe ser también un profesor.
+        
+        No se valida con una regla, sino con la definición de la base de datos (El director es una 
+            referencia a un profesor).
+
+        \item Dos o más cursos no deben tener asignado el mismo salón el mismo día a la misma 
+            hora.
+        
+        \begin{lstlisting}
+            create rule uniq_horario as
+            on update to Horario.salon 
+                where 
+                    (select count(*) 
+                    from horario
+                    where salon = new.salon
+                    group by hora, dia) > 1
+            do after
+                delete Horario
+                where
+                    Horario.dia = new.dia and
+                    Horario.hora = new.hora and
+                    Horario.seccion = new.seccion and
+                    Horario.salon = new.salon
+        \end{lstlisting}
+
+        \item Cuando un profesor obtiene un aumento de sueldo, el director del departamento al que 
+            pertenece ese profesor también obtiene un aumento salarial en al menos la misma cantidad.
+
+            \begin{lstlisting}
+                create rule salario_dir as
+                on update to Profesor.salario_por_hora
+                    where
+                        new.deref(trabajan_para).deref(dirige).salario_por hora < new.salario_por_hora
+                do 
+                    update Profesor
+                    set salario_por_hora = new.salario_por_hora
+                    where rfc = new.deref(trabajan_para).deref(dirige).rfc
+            \end{lstlisting}
+
+        \item Cada vez que un profesor recibe un aumento de sueldo, el director del departamento al 
+        que pertenece ese profesor recibe un aumento salarial en almenos la misma cantidad. Además, 
+        cuando un profesor recibe un aumento salarial el presupuesto del departamento debe incrementarse 
+        para ser mayor a la suma de los sueldos detodos los profesoresen el departamento (pude ser 
+        necesario agregar el atributo presupuesto a depto)
+
+        \begin{lstlisting}
+            create rule salario_dir as
+            on update to Profesor.salario_por_hora
+                where
+                    new.deref(trabajan_para).deref(dirige).salario_por hora < new.salario_por_hora
+            do 
+                update Profesor
+                set salario_por_hora = new.salario_por_hora
+                where rfc = new.deref(trabajan_para).deref(dirige).rfc
+
+            create rule presupuesto as
+            on update to Profesor.salario_por_hora
+                where
+                    new.salario_por hora > new.deref(trabajan_para).presupuesto
+            do 
+                update Departamento
+                set presupuesto = new.salario_por_hora
+                where nombre_dept = new.deref(trabajan_para).nombre_dept
+        \end{lstlisting}
+    \end{enumerate}
+    
+\end{document}
